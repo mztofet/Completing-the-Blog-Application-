@@ -1,33 +1,51 @@
-﻿using AtlasBlog.Models.Views;
+﻿using AtlasBlog.Data;
+using AtlasBlog.Models.Views;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace AtlasBlog.Controllers;
 
 public class HomeController : Controller
 {
+    private readonly ApplicationDbContext _context;
+    private readonly IMemoryCache _cache;
+
+    public HomeController(
+        ApplicationDbContext context,
+        IMemoryCache cache)
+    {
+        _context = context;
+        _cache = cache;
+    }
 
     public async Task<IActionResult> Index()
     {
-        // TODO: Try retrieving the blog list from the cache
-        // TODO: If cache is empty, fetch blogs from the database (including author information)
-        // TODO: Map the blog data to a view model
-        // TODO: Store the result in the cache with a 30-minute expiration
-        // TODO: Return the blog list view
+        const string cacheKey = "BlogList";
 
-        // Placeholder data used temporarily for application response; will be replaced with actual data.
-        return View(new List<BlogListViewModel>
+        if (!_cache.TryGetValue(
+            cacheKey,
+            out List<BlogListViewModel>? blogs))
         {
-            new BlogListViewModel
-            {
-                 AuthorEmail= "author @example.com",
-                BlogId=1,
-                Title= "World of Code",
-                Subtitle = "My bits and bytes"
-            }
+            blogs = await _context.Blogs
+                .Include(b => b.Author)
+                .Select(b => new BlogListViewModel
+                {
+                    BlogId = b.BlogId,
+                    Title = b.Title,
+                    Subtitle = b.Subtitle,
+                    AuthorEmail = b.Author == null
+                        ? string.Empty
+                        : b.Author.Email ?? string.Empty
+                })
+                .ToListAsync();
 
-        });
+            _cache.Set(
+                cacheKey,
+                blogs,
+                TimeSpan.FromMinutes(30));
+        }
+
+        return View(blogs);
     }
 }
-
-
-
