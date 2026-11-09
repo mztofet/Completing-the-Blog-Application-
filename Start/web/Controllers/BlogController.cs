@@ -1,52 +1,107 @@
-﻿using AtlasBlog.Models.Views;
+﻿using AtlasBlog.Data;
+using AtlasBlog.Models.Views;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 
 namespace AtlasBlog.Controllers;
 
 [Authorize(Policy = "AuthorRequired")]
 public class BlogController : Controller
 {
+    private readonly ApplicationDbContext _context;
+
+    public BlogController(ApplicationDbContext context)
+    {
+        _context = context;
+    }
+
     [HttpGet]
     public async Task<IActionResult> MyBlog()
     {
-        // TODO: Retrieve the currently logged-in user
-        // TODO: If no user is logged in, return a challenge response
-        // TODO: Fetch the user's blog along with its related posts from the database
-        // TODO: If no blog is found, return a NotFound response
-        // TODO: Return the blog data to the view
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
-        return View(); // Placeholder response
+        if (string.IsNullOrEmpty(userId))
+        {
+            return Challenge();
+        }
+
+        var blog = await _context.Blogs
+            .Include(b => b.Posts)
+            .FirstOrDefaultAsync(b => b.AuthorId == userId);
+
+        if (blog == null)
+        {
+            return NotFound();
+        }
+
+        return View(blog);
     }
 
     [HttpGet]
     public async Task<IActionResult> Edit()
     {
-        // TODO: Retrieve the currently logged-in user
-        // TODO: If no user is logged in, return a challenge response
-        // TODO: Fetch the user's blog from the database
-        // TODO: If no blog is found, return a NotFound response
-        // TODO: Create and populate a view model with the blog details
-        // TODO: Return the view model to the view
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
-        return View(); // Placeholder response
+        if (string.IsNullOrEmpty(userId))
+        {
+            return Challenge();
+        }
+
+        var blog = await _context.Blogs
+            .FirstOrDefaultAsync(b => b.AuthorId == userId);
+
+        if (blog == null)
+        {
+            return NotFound();
+        }
+
+        var model = new BlogEditViewModel
+        {
+            Title = blog.Title,
+            Subtitle = blog.Subtitle,
+            Description = blog.Description
+        };
+
+        return View(model);
     }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Edit(BlogEditViewModel model)
     {
-        // TODO: Validate the model state
-        // TODO: Retrieve the currently logged-in user
-        // TODO: If no user is logged in, return a challenge response
-        // TODO: Fetch the user's blog from the database
-        // TODO: If no blog is found, return a NotFound response
-        // TODO: Update the blog properties with the new values from the view model
-        // TODO: Update the LastModifiedAt timestamp
-        // TODO: Save the changes to the database
-        // TODO: Store a success message in TempData
-        // TODO: Redirect to the MyBlog page
+        if (!ModelState.IsValid)
+        {
+            return View(model);
+        }
 
-        return View(model); // Placeholder response
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (string.IsNullOrEmpty(userId))
+        {
+            return Challenge();
+        }
+
+        var blog = await _context.Blogs
+            .FirstOrDefaultAsync(b => b.AuthorId == userId);
+
+        if (blog == null)
+        {
+            return NotFound();
+        }
+
+        blog.Title = model.Title;
+        blog.Subtitle = model.Subtitle;
+        blog.Description = model.Description;
+        blog.LastModifiedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync();
+
+        TempData["Success"] = "Blog updated successfully.";
+
+        return RedirectToAction(nameof(MyBlog));
     }
-}
+}   
+
+ 
